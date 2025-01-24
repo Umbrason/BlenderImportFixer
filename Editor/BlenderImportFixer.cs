@@ -2,20 +2,16 @@ using System;
 using System.IO;
 using System.Text.RegularExpressions;
 using UnityEditor;
-using UnityEngine;
-using UnityEngine.Assertions;
 
 /*
-modified version of a script by user 'fuser'
+modified version of a script by 'fuser'
 https://discussions.unity.com/t/blender-2-8-animations-not-importing-in-beta-2019-3-0b4/759171/46 
 */
 public class BlenderImportFixer
 {
     private const string importerScriptName = "Unity-BlenderToFBX.py";
     private static readonly string relativePathFromAppToImporterScript = Path.Combine("Data", "Tools", importerScriptName);
-
-    private static readonly Regex bakeAllAnimsFalseFinder = new Regex(@"(.*\b)bake_anim_use_all_actions=False(\b.*)");
-    private const string bakeAllAnimsTrueReplacement = "$1bake_anim_use_all_actions=True$2";
+    private static readonly string bakeAllAnimsRegex = @"bake_anim_use_all_actions=(True|False)";
 
     [InitializeOnLoadMethod]
     static void FixBlenderAnimationImporter()
@@ -33,39 +29,31 @@ If you find this file and it's still relevant please fix the reference in class 
             return;
         }
 
-        var foundFalseBakeAllAnims = false;
+        var foundBakeAllAnimsLine = false;
+        var foundFalseBakeAllAnimsLine = false;
 
         var tempFilePath = Path.GetTempFileName();
-        using (StreamWriter output = File.CreateText(tempFilePath))
+        var lines = File.ReadAllLines(pathToImporterScript);
+        for (int i = 0; i < lines.Length; i++)
         {
-            using (StreamReader original = File.OpenText(pathToImporterScript))
-            {
-                string singleLine;
-                while ((singleLine = original.ReadLine()) != null)
-                {
-                    var matches = bakeAllAnimsFalseFinder.Matches(singleLine);
-                    if (matches.Count > 0)
-                    {
-                        Assert.AreEqual(matches.Count, 1, "The regex expression should be greedy, so there should only be a maximum of one match per line");
-                        output.WriteLine(matches[0].Result(bakeAllAnimsTrueReplacement));
-                        foundFalseBakeAllAnims = true;
-                    }
-                    else
-                    {
-                        output.WriteLine(singleLine);
-                    }
-                }
-            }
+            var match = Regex.Match(lines[i], bakeAllAnimsRegex);
+            if (!match.Success) continue;
+            foundBakeAllAnimsLine = true;
+            var containsFalse = lines[i].Contains("False");
+            foundFalseBakeAllAnimsLine |= containsFalse;
+            lines[i] = containsFalse ? lines[i].Replace("False", "True") : lines[i];
         }
 
-        if (!foundFalseBakeAllAnims)
+        if (!foundBakeAllAnimsLine)
         {
-            EditorUtility.DisplayDialog("Could not find the line to fix", String.Format("We successfully found the script that needed to be fixed, but there was no line matching the \"{0}\" regex. This run of this script has not fixed the importer - it's possible that the importer has already been fixed.", bakeAllAnimsFalseFinder.ToString()), "OK");
-            File.Delete(tempFilePath);
+            EditorUtility.DisplayDialog("Could not find any lines to fix", @$"
+Could not find any relevant line in the importer script, so the script cannot be fixed.
+Either the file is corrupt or the issue has been fixed by the Unity team.
+In the latter case you can safely remove this package."
+            , "OK");
             return;
         }
-
-        File.Delete(pathToImporterScript);
-        File.Move(tempFilePath, pathToImporterScript);
+        if(!foundFalseBakeAllAnimsLine) return; //nothing to write back
+        File.WriteAllLines(pathToImporterScript, lines);
     }
 }
