@@ -1,0 +1,12 @@
+{
+  "name": "com.umbrason.blenderimportfixer",
+  "version": "1.0.0",
+  "displayName": "BlenderImportFixer",
+  "description": "",
+  "keywords": [    
+  ],
+  "author": {
+    "name": "Umbrason"
+  },
+  "hideInEditor": false
+}
